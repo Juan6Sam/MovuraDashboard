@@ -56,13 +56,23 @@ const PARKINGS: Parking[] = [
 function randBetween(a: number, b: number) { return Math.floor(Math.random() * (b - a + 1)) + a; }
 function randomEmail(i: number) { return `usuario${i}@correo.mx`; }
 
+// Helper para manejar errores de forma consistente
+function handleError(err: any, defaultMessage: string): Error {
+  const message = err?.response?.data?.message || err.message || defaultMessage;
+  return new Error(message);
+}
+
 export async function getParkings(): Promise<Parking[]> {
   if (USE_MOCK) {
     await new Promise((r) => setTimeout(r, 200));
     return PARKINGS;
   }
-  const res = await api.get("/parkings");
-  return res.data;
+  try {
+    const res = await api.get("/parkings");
+    return res.data;
+  } catch (err: any) {
+    throw handleError(err, "Error al obtener los parkings");
+  }
 }
 
 export async function getParkingById(id: string): Promise<Parking | null> {
@@ -70,8 +80,30 @@ export async function getParkingById(id: string): Promise<Parking | null> {
     await new Promise((r) => setTimeout(r, 200));
     return PARKINGS.find((p) => p.id === id) ?? null;
   }
-  const res = await api.get(`/parkings/${encodeURIComponent(id)}`);
-  return res.data;
+  try {
+    const res = await api.get(`/parkings/${encodeURIComponent(id)}`);
+    return res.data;
+  } catch (err: any) {
+    throw handleError(err, "Error al obtener el parking");
+  }
+}
+
+export async function updateParkingConfig(parkingId: string, config: any): Promise<Parking> {
+  if (USE_MOCK) {
+    await new Promise((r) => setTimeout(r, 500));
+    const parking = PARKINGS.find((p) => p.id === parkingId);
+    if (parking) {
+      parking.config = { ...parking.config, ...config };
+      return parking;
+    }
+    throw new Error("Parking no encontrado");
+  }
+  try {
+    const res = await api.put(`/parkings/${encodeURIComponent(parkingId)}/config`, config);
+    return res.data;
+  } catch (err: any) {
+    throw handleError(err, "Error al actualizar la configuración");
+  }
 }
 
 export async function updateComercios(parkingId: string, comercios: any[]) {
@@ -81,11 +113,14 @@ export async function updateComercios(parkingId: string, comercios: any[]) {
     if (p) p.comercios = comercios;
     return comercios;
   }
-  const res = await api.put(`/parkings/${encodeURIComponent(parkingId)}/comercios`, comercios);
-  return res.data;
+  try {
+    const res = await api.put(`/parkings/${encodeURIComponent(parkingId)}/comercios`, comercios);
+    return res.data;
+  } catch (err: any) {
+    throw handleError(err, "Error al actualizar los comercios");
+  }
 }
 
-/** Generate mock tickets constrained to a range */
 export function genTickets(parkingId: string, startISO: string, endISO: string, n = 120): Ticket[] {
   const start = new Date(startISO).getTime();
   const end = new Date(endISO).getTime();
@@ -102,7 +137,7 @@ export function genTickets(parkingId: string, startISO: string, endISO: string, 
       entradaISO: new Date(inTs).toISOString(),
       salidaISO: new Date(Math.min(outTs, end)).toISOString(),
       status,
-      phone: `55${randBetween(10000000, 99999999)}`
+      phone: `55${randBetween(10000000, 99999999)}`,
     });
   }
   rows.sort((a, b) => new Date(a.entradaISO).getTime() - new Date(b.entradaISO).getTime());
@@ -132,22 +167,24 @@ export function genTransactions(parkingId: string, startISO: string, endISO: str
       status,
       monto,
       excedente,
-      total
+      total,
     });
   }
   rows.sort((a, b) => new Date(a.entradaISO).getTime() - new Date(b.entradaISO).getTime());
   return rows;
 }
 
-/** API wrappers */
-
 export async function getOccupancyReport(parkingId: string, startISO: string, endISO: string) {
   if (USE_MOCK) {
     await new Promise((r) => setTimeout(r, 400));
     return genTickets(parkingId, startISO, endISO, 80);
   }
-  const res = await api.get(`/parkings/${encodeURIComponent(parkingId)}/reports/occupancy`, { params: { start: startISO, end: endISO } });
-  return res.data;
+  try {
+    const res = await api.get(`/parkings/${encodeURIComponent(parkingId)}/reports/occupancy`, { params: { start: startISO, end: endISO } });
+    return res.data;
+  } catch (err: any) {
+    throw handleError(err, "Error al obtener el reporte de ocupación");
+  }
 }
 
 export async function getTransactionsReport(parkingId: string, startISO: string, endISO: string) {
@@ -155,8 +192,12 @@ export async function getTransactionsReport(parkingId: string, startISO: string,
     await new Promise((r) => setTimeout(r, 400));
     return genTransactions(parkingId, startISO, endISO, 120);
   }
-  const res = await api.get(`/parkings/${encodeURIComponent(parkingId)}/reports/transactions`, { params: { start: startISO, end: endISO } });
-  return res.data;
+  try {
+    const res = await api.get(`/parkings/${encodeURIComponent(parkingId)}/reports/transactions`, { params: { start: startISO, end: endISO } });
+    return res.data;
+  } catch (err: any) {
+    throw handleError(err, "Error al obtener el reporte de transacciones");
+  }
 }
 
 export async function getManualSearch(parkingId: string, startISO: string, email?: string, phone?: string) {
@@ -172,13 +213,17 @@ export async function getManualSearch(parkingId: string, startISO: string, email
         phone: phone || `55${randBetween(10000000, 99999999)}`,
         entradaISO: new Date(Date.now() - randBetween(5, 240) * 60 * 1000).toISOString(),
         salidaISO: new Date().toISOString(),
-        status: "abierto"
+        status: "abierto",
       });
     }
     return rows;
   }
-  const res = await api.get(`/parkings/${encodeURIComponent(parkingId)}/manual-search`, { params: { start: startISO, email, phone } });
-  return res.data;
+  try {
+    const res = await api.get(`/parkings/${encodeURIComponent(parkingId)}/manual-search`, { params: { start: startISO, email, phone } });
+    return res.data;
+  } catch (err: any) {
+    throw handleError(err, "Error en la búsqueda manual");
+  }
 }
 
 export async function markTicketPaid(parkingId: string, ticketId: string, amount?: number) {
@@ -188,6 +233,10 @@ export async function markTicketPaid(parkingId: string, ticketId: string, amount
     const qrToken = btoa(JSON.stringify(payload));
     return { success: true, qrToken };
   }
-  const res = await api.post(`/parkings/${encodeURIComponent(parkingId)}/tickets/${encodeURIComponent(ticketId)}/mark-paid`, { amount });
-  return res.data;
+  try {
+    const res = await api.post(`/parkings/${encodeURIComponent(parkingId)}/tickets/${encodeURIComponent(ticketId)}/mark-paid`, { amount });
+    return res.data;
+  } catch (err: any) {
+    throw handleError(err, "Error al marcar el ticket como pagado");
+  }
 }

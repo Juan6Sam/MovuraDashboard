@@ -119,7 +119,7 @@ export default function ComerciosAsociados() {
           <div className="mb-4 flex items-center justify-between">
             <div className="text-lg font-semibold">Comercios asociados</div>
             <div className="flex items-center gap-2">
-              <GhostButton onClick={()=>{ qc.invalidateQueries(["parking", selectedId]); }}>{RotateCcw className="h-4 w-4"}</GhostButton>
+              <GhostButton onClick={()=>{ qc.invalidateQueries(["parking", selectedId]); }}><RotateCcw className="h-4 w-4" /></GhostButton>
               <PrimaryButton onClick={()=> saveMutation.mutate({ parkingId: selectedId!, comercios: rows })} disabled={!rows || rows.length===0}><Save className="h-4 w-4"/> Guardar cambios</PrimaryButton>
             </div>
           </div>

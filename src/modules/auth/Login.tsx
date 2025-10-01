@@ -14,19 +14,26 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handle = async (e: any) => {
+  const handle = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(""); setLoading(true);
-    const res = await login(email.trim(), pass);
-    setLoading(false);
-    if (!res.ok) { setError(res.error || "Error"); return; }
-    const userRaw = localStorage.getItem("movura_user");
-    const user = userRaw ? JSON.parse(userRaw) : null;
-    if (user?.firstLogin) nav("/change-password"); else nav("/");
+    setError("");
+    setLoading(true);
+    try {
+      await login(email.trim(), pass);
+      // Después de un login exitoso, el AuthProvider actualiza el estado
+      // y el AppRoutes nos redirigirá automáticamente.
+      // Ya no es necesario manejar la redirección aquí, pero si quisiéramos
+      // forzarla, podemos hacerlo.
+    } catch (err: any) {
+      // Si la API lanza un error, lo capturamos aquí.
+      setError(err.message || "Ocurrió un error inesperado.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen grid place-items-center p-4">
+    <div className="min-h-screen grid place-items-center p-4 bg-gray-50">
       <Card className="w-full max-w-md">
         <div className="mb-6 flex items-center justify-between">
           <div className="font-semibold text-xl">Movura Admin</div>
@@ -38,7 +45,7 @@ export default function Login() {
           <TextInput label="Contraseña" value={pass} onChange={setPass} type="password" placeholder="********" leftIcon={<Lock className="h-4 w-4 text-gray-400" />} />
           {error && <div className="rounded-lg bg-red-50 p-2 text-sm text-red-700">{error}</div>}
           <div className="flex items-center justify-between">
-            <GhostButton onClick={() => nav("/forgot")}>¿Olvidaste tu contraseña?</GhostButton>
+            <GhostButton type="button" onClick={() => nav("/forgot")}>¿Olvidaste tu contraseña?</GhostButton>
             <PrimaryButton type="submit" disabled={!email || !pass || loading}><LogIn className="h-4 w-4" /> {loading ? "Entrando..." : "Entrar"}</PrimaryButton>
           </div>
         </form>

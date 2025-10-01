@@ -1,73 +1,52 @@
 
-import React, { createContext, useCallback, useState, useContext } from "react";
+import React, { createContext, useState, useEffect, ReactNode } from 'react';
+import { Usuario, RespuestaLogin } from '../types';
+import * as authApi from '../services/auth.api';
 
-// El tipo de usuario ahora incluye la bandera 'firstLogin'
-// como se ve en el archivo de referencia.
-type AuthUser = {
-  username: string;
-  firstLogin: boolean;
-};
-
-type AuthCtx = {
-  user: AuthUser | null;
-  loading: boolean;
-  isAuthenticated: boolean;
-  error: string | null; // <-- Añadido para gestionar errores
-  login: (username: string, pass: string) => Promise<void>;
+interface AuthContextType {
+  usuario: Usuario | null;
+  login: (credenciales: { email: string; password: string }) => Promise<void>;
   logout: () => void;
-  completeFirstLogin: () => void;
-};
+  isLoading: boolean;
+}
 
-const AuthContext = createContext<AuthCtx | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null); // <-- 1. DECLARAR ESTADO DE ERROR
+interface AuthProviderProps {
+  children: ReactNode;
+}
 
-  const login = async (username: string, pass: string) => {
-    setLoading(true);
-    setError(null); // Limpiamos errores anteriores
-    
-    await new Promise(resolve => setTimeout(resolve, 600));
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  const [usuario, setUsuario] = useState<Usuario | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-    if (username && pass) {
-      // Éxito: creamos un usuario de prueba.
-      setUser({ username: username, firstLogin: true });
-      setLoading(false);
-    } else {
-      // Error: el usuario o la contraseña están vacíos.
-      const errText = "Usuario o contraseña inválidos";
-      setError(errText);
-      setLoading(false);
-      throw new Error(errText);
+  useEffect(() => {
+    // Lógica para verificar si ya existe un token al cargar la app
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      // Aquí podrías decodificar el token para obtener los datos del usuario
+      // y establecer el estado de autenticación. Por simplicidad, lo omitimos.
+      // En una app real, llamarías a un endpoint como /api/auth/me
     }
-  };
-
-  const logout = useCallback(() => {
-    setUser(null);
-    // No borramos el localStorage para este ejemplo, pero en una app real se haría.
+    setIsLoading(false);
   }, []);
 
-  const completeFirstLogin = () => {
-    if (user) {
-      setUser({ ...user, firstLogin: false });
-    }
+  const login = async (credenciales: { email: string; password: string }) => {
+    const respuesta: RespuestaLogin = await authApi.login(credenciales);
+    setUsuario(respuesta.usuario);
   };
 
-  const isAuthenticated = !!user;
+  const logout = () => {
+    authApi.logout();
+    setUsuario(null);
+  };
 
-  return (
-    <AuthContext.Provider
-      value={{ user, loading, isAuthenticated, error, login, logout, completeFirstLogin }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-}
+  const value = {
+    usuario,
+    login,
+    logout,
+    isLoading,
+  };
 
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth debe usarse dentro de un AuthProvider");
-  return ctx;
-}
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};

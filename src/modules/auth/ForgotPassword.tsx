@@ -1,11 +1,12 @@
+
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import Card from "../../components/ui/Card";
 import TextInput from "../../components/ui/TextInput";
 import { PrimaryButton, GhostButton } from "../../components/ui/Button";
 import { Mail } from "lucide-react";
 
-// El componente ahora recibe 'onBack' para volver a la pantalla de login.
-export default function ForgotPassword({ onBack }) {
+export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -15,7 +16,6 @@ export default function ForgotPassword({ onBack }) {
     if (!email) return;
 
     setLoading(true);
-    // Simulamos el envío con un retardo, como en el archivo de referencia.
     await new Promise(resolve => setTimeout(resolve, 500));
     setLoading(false);
     setSent(true);
@@ -34,8 +34,9 @@ export default function ForgotPassword({ onBack }) {
             <p className="text-sm text-gray-600">Ingresa tu correo y te enviaremos una contraseña temporal para que puedas volver a acceder.</p>
             <TextInput label="Correo" type="email" value={email} onChange={setEmail} placeholder="admin@empresa.com" autoComplete="email" leftIcon={<Mail className="h-4 w-4 text-gray-400" />} required />
             <div className="flex items-center justify-between">
-              {/* El botón "Volver" ahora usa la prop onBack */}
-              <GhostButton type="button" onClick={onBack}>Volver</GhostButton>
+              <Link to="/login">
+                <GhostButton type="button">Volver</GhostButton>
+              </Link>
               <PrimaryButton type="submit" disabled={!email || loading}>
                 {loading ? "Enviando..." : "Enviar contraseña temporal"}
               </PrimaryButton>
@@ -47,8 +48,9 @@ export default function ForgotPassword({ onBack }) {
               <p className="font-medium">¡Listo!</p>
               <p className="mt-1">Si el correo <strong>{email}</strong> está registrado, recibirás una contraseña temporal en tu bandeja de entrada.</p>
             </div>
-            {/* El botón para volver al login también usa onBack */}
-            <PrimaryButton onClick={onBack} className="w-full">Volver al login</PrimaryButton>
+            <Link to="/login" className="w-full">
+              <PrimaryButton className="w-full">Volver al login</PrimaryButton>
+            </Link>
           </div>
         )}
       </Card>

@@ -1,59 +1,32 @@
-import { api } from "./apiClient";
 
-// La evaluación de VITE_USE_MOCK es correcta y robusta.
-const USE_MOCK = (import.meta.env.VITE_USE_MOCK ?? "true").toString() !== "false";
+import apiClient from './apiClient';
+import { RespuestaLogin, Usuario } from '../types';
 
-export type AuthUser = { username: string; email?: string; firstLogin?: boolean };
-
-export async function loginApi(email: string, password: string) {
-  // La lógica del mock es adecuada para el desarrollo.
-  if (USE_MOCK) {
-    await new Promise((r) => setTimeout(r, 400));
-    if (!email || !password) {
-      // Para mantener consistencia con la API real, lanzamos un error.
-      throw new Error("Usuario o contraseña inválidos");
-    }
-    const token = btoa(JSON.stringify({ sub: email, iat: Date.now() }));
-    const firstLogin = email.includes("first");
-    return { token, user: { username: email.split("@")[0], email, firstLogin } };
+// Endpoint: POST /api/auth/login
+export const login = async (credenciales: { email: string; password: string }): Promise<RespuestaLogin> => {
+  const response = await apiClient.post('/auth/login', credenciales);
+  // Almacenar el token después de un login exitoso
+  if (response.data.accessToken) {
+    localStorage.setItem('accessToken', response.data.accessToken);
   }
+  return response.data;
+};
 
-  // Lógica para la API real
-  try {
-    const res = await api.post("/auth/login", { email, password });
-    return res.data;
-  } catch (err: any) {
-    // Lanzamos el error para que sea capturado por react-query o el вызывающий código.
-    throw new Error(err?.response?.data?.message || err.message || "Error en el login");
-  }
-}
+// Endpoint: POST /api/auth/forgot
+export const forgotPassword = async (email: string): Promise<{ success: boolean; message: string }> => {
+  const response = await apiClient.post('/auth/forgot', { email });
+  return response.data;
+};
 
-export async function forgotPasswordApi(email: string) {
-  if (USE_MOCK) {
-    await new Promise((r) => setTimeout(r, 300));
-    if (!email) throw new Error("El correo es requerido");
-    return { success: true, message: "Si el correo existe, se envió una contraseña temporal." };
-  }
+// Endpoint: POST /api/auth/change-first-password
+export const changeFirstPassword = async (datos: any): Promise<{ success: boolean; message: string }> => {
+  const response = await apiClient.post('/auth/change-first-password', datos);
+  return response.data;
+};
 
-  try {
-    const res = await api.post("/auth/forgot", { email });
-    return res.data;
-  } catch (err: any) {
-    throw new Error(err?.response?.data?.message || err.message || "Error al solicitar nueva contraseña");
-  }
-}
-
-export async function changeFirstPasswordApi(username: string, newPassword: string) {
-  if (USE_MOCK) {
-    await new Promise((r) => setTimeout(r, 300));
-    if (!username || !newPassword) throw new Error("Datos inválidos");
-    return { success: true };
-  }
-
-  try {
-    const res = await api.post("/auth/change-first-password", { username, newPassword });
-    return res.data;
-  } catch (err: any) {
-    throw new Error(err?.response?.data?.message || err.message || "Error al cambiar la contraseña");
-  }
-}
+// Función para hacer logout
+export const logout = () => {
+  // Limpiar el token de localStorage
+  localStorage.removeItem('accessToken');
+  // Aquí se podría añadir una llamada a un endpoint de logout en el backend si existiera
+};

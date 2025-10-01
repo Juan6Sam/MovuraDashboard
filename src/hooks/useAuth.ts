@@ -1,6 +1,11 @@
-import { useAuthContext } from '../context/AuthContext';
 
-// Este archivo sirve como un alias conveniente para el hook de contexto.
-// Permite a los componentes importar `useAuth` desde una ubicación predecible
-// en lugar de tener que conocer la ruta exacta al archivo de contexto.
-export const useAuth = useAuthContext;
+import { useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth debe ser usado dentro de un AuthProvider');
+  }
+  return context;
+};

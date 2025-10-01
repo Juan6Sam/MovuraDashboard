@@ -1,120 +1,73 @@
-import React, { createContext, useCallback, useEffect, useState } from "react";
-import { loginApi, forgotPasswordApi, changeFirstPasswordApi, AuthUser } from "../services/auth.api";
-import { setAuthToken } from "../services/apiClient";
 
-type LoginResponse = { token: string; user: AuthUser };
+import React, { createContext, useCallback, useState, useContext } from "react";
+
+// El tipo de usuario ahora incluye la bandera 'firstLogin'
+// como se ve en el archivo de referencia.
+type AuthUser = {
+  username: string;
+  firstLogin: boolean;
+};
 
 type AuthCtx = {
   user: AuthUser | null;
-  token: string | null;
   loading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  error: string | null; // <-- Añadido para gestionar errores
+  login: (username: string, pass: string) => Promise<void>;
   logout: () => void;
-  forgotPassword: (email: string) => Promise<{ success: boolean; message: string }>;
-  changeFirstPassword: (username: string, newPassword: string) => Promise<{ success: boolean; message?: string }>;
+  completeFirstLogin: () => void;
 };
 
 const AuthContext = createContext<AuthCtx | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true); // Inicialmente en true
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null); // <-- 1. DECLARAR ESTADO DE ERROR
 
-  useEffect(() => {
-    try {
-      const storedToken = localStorage.getItem("movura_token");
-      if (storedToken) {
-        setToken(storedToken);
-        setAuthToken(storedToken);
-        const storedUser = localStorage.getItem("movura_user");
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
-        }
-      }
-    } catch (error) {
-      console.error("Fallo al cargar el estado de autenticación desde localStorage", error);
-      // En caso de error, limpiar el estado
-      setToken(null);
-      setUser(null);
-      localStorage.removeItem("movura_token");
-      localStorage.removeItem("movura_user");
-    } finally {
-      setLoading(false); // Finaliza la carga inicial
-    }
-  }, []);
-
-  const handleSetToken = (newToken: string | null) => {
-    setToken(newToken);
-    setAuthToken(newToken ?? undefined);
-    if (newToken) {
-      localStorage.setItem("movura_token", newToken);
-    } else {
-      localStorage.removeItem("movura_token");
-    }
-  };
-
-  const handleSetUser = (newUser: AuthUser | null) => {
-    setUser(newUser);
-    if (newUser) {
-      localStorage.setItem("movura_user", JSON.stringify(newUser));
-    } else {
-      localStorage.removeItem("movura_user");
-    }
-  };
-
-  const login = async (email: string, password: string) => {
+  const login = async (username: string, pass: string) => {
     setLoading(true);
-    try {
-      const { token: apiToken, user: apiUser } = await loginApi(email, password);
-      handleSetUser(apiUser);
-      handleSetToken(apiToken);
-    } catch (error) {
-      handleSetUser(null);
-      handleSetToken(null);
-      throw error;
-    } finally {
+    setError(null); // Limpiamos errores anteriores
+    
+    await new Promise(resolve => setTimeout(resolve, 600));
+
+    if (username && pass) {
+      // Éxito: creamos un usuario de prueba.
+      setUser({ username: username, firstLogin: true });
       setLoading(false);
+    } else {
+      // Error: el usuario o la contraseña están vacíos.
+      const errText = "Usuario o contraseña inválidos";
+      setError(errText);
+      setLoading(false);
+      throw new Error(errText);
     }
   };
 
   const logout = useCallback(() => {
-    handleSetUser(null);
-    handleSetToken(null);
+    setUser(null);
+    // No borramos el localStorage para este ejemplo, pero en una app real se haría.
   }, []);
 
-  const forgotPassword = async (email: string) => {
-    setLoading(true);
-    try {
-      return await forgotPasswordApi(email);
-    } finally {
-      setLoading(false);
+  const completeFirstLogin = () => {
+    if (user) {
+      setUser({ ...user, firstLogin: false });
     }
   };
 
-  const changeFirstPassword = async (username: string, newPassword: string) => {
-    setLoading(true);
-    try {
-      return await changeFirstPasswordApi(username, newPassword);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const isAuthenticated = !!token;
+  const isAuthenticated = !!user;
 
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, isAuthenticated, login, logout, forgotPassword, changeFirstPassword }}
+      value={{ user, loading, isAuthenticated, error, login, logout, completeFirstLogin }}
     >
-      {!loading && children} {/* No renderizar hijos hasta que la carga inicial termine */}
+      {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const ctx = React.useContext(AuthContext);
+  const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth debe usarse dentro de un AuthProvider");
   return ctx;
 }

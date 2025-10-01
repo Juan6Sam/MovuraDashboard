@@ -1,73 +1,93 @@
-import React, { Suspense } from "react";
-import { Routes, Route, Navigate, Outlet } from "react-router-dom";
-import { useAuth } from "../hooks/useAuth";
-import ProtectedLayout from "./ProtectedLayout";
+import React, { useState, useEffect } from "react";
+import { useAuth } from "../context/AuthContext";
 
-// --- Carga diferida (Lazy Loading) de componentes ---
-const Login = React.lazy(() => import("../modules/auth/Login"));
-const ForgotPassword = React.lazy(() => import("../modules/auth/ForgotPassword"));
-const FirstPasswordChange = React.lazy(() => import("../modules/auth/FirstPasswordChange"));
-const PasswordUpdated = React.lazy(() => import("../modules/auth/PasswordUpdated"));
-const GestionDeTarifas = React.lazy(() => import("../modules/tarifas/GestionDeTarifas"));
-const ComerciosAsociados = React.lazy(() => import("../modules/comercios/ComerciosAsociados"));
-const ConsultaDeOcupacion = React.lazy(() => import("../modules/ocupacion/ConsultaDeOcupacion"));
-const ConsultaDeTransacciones = React.lazy(() => import("../modules/transacciones/ConsultaDeTransacciones"));
-const PagoManual = React.lazy(() => import("../modules/pagos/PagoManual"));
+// Importamos todas las "vistas" que nuestra máquina de estados puede mostrar.
+import Login from "../modules/auth/Login";
+import ForgotPassword from "../modules/auth/ForgotPassword";
+import FirstPasswordChange from "../modules/auth/FirstPasswordChange";
+import PasswordUpdated from "../modules/auth/PasswordUpdated";
+import ProtectedLayout from "./ProtectedLayout"; // Este es nuestro "AppShell"
 
-// --- Contenedor de Carga ---
-// Un componente de carga estilizado para una mejor experiencia de usuario.
+// Un componente de carga simple para transiciones.
 const Loading = () => (
   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100%' }}>
     Cargando...
   </div>
 );
 
-// --- Enrutador de Rutas Públicas ---
-// Si el usuario está autenticado, lo redirige al home. Si no, muestra la ruta pública.
-const PublicRoutes = () => {
-  const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <Navigate to="/" replace /> : <Outlet />;
-};
-
-// --- Enrutador de Rutas Privadas ---
-// Si el usuario no está autenticado, lo redirige al login. Si no, muestra la ruta protegida.
-const PrivateRoutes = () => {
-  const { isAuthenticated } = useAuth();
-  return isAuthenticated ? (
-    <ProtectedLayout />
-  ) : (
-    <Navigate to="/login" replace />
-  );
-};
-
-// --- Componente Principal de Rutas ---
-// Utiliza una única instancia de <Routes> para gestionar toda la navegación.
+// AppRoutes ahora es una máquina de estados que controla el flujo de la UI.
 export default function AppRoutes() {
-  return (
-    <Suspense fallback={<Loading />}>
-      <Routes>
-        {/* Rutas Públicas */}
-        <Route element={<PublicRoutes />}>
-          <Route path="/login" element={<Login />} />
-          <Route path="/forgot" element={<ForgotPassword />} />
-          <Route path="/change-password" element={<FirstPasswordChange />} />
-          <Route path="/password-updated" element={<PasswordUpdated />} />
-        </Route>
+  const { user, isAuthenticated, loading: authLoading, completeFirstLogin } = useAuth();
+  
+  // 'phase' es el estado actual de nuestra máquina. Determina qué vista se muestra.
+  const [phase, setPhase] = useState("login");
 
-        {/* Rutas Privadas */}
-        <Route element={<PrivateRoutes />}>
-          <Route path="/" element={<GestionDeTarifas />} />
-          <Route path="/tarifas" element={<GestionDeTarifas />} />
-          <Route path="/comercios" element={<ComerciosAsociados />} />
-          <Route path="/ocupacion" element={<ConsultaDeOcupacion />} />
-          <Route path="/transacciones" element={<ConsultaDeTransacciones />} />
-          <Route path="/pago-manual" element={<PagoManual />} />
-        </Route>
+  // Este efecto reacciona a los cambios en el estado de autenticación
+  // y actualiza la 'phase' para mostrar la vista correcta.
+  useEffect(() => {
+    if (authLoading) return; // No hacer nada mientras se carga el estado de auth
 
-        {/* Redirección por defecto */}
-        {/* Si ninguna ruta coincide, redirige a /login. */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </Suspense>
-  );
+    if (isAuthenticated) {
+      // Si el usuario está autenticado, decidimos a dónde debe ir.
+      if (user?.firstLogin) {
+        // Si es su primer login, forzamos el cambio de contraseña.
+        setPhase("change");
+      } else {
+        // Si no, va a la aplicación principal.
+        setPhase("app");
+      }
+    } else {
+      // Si no está autenticado, lo mantenemos en las vistas públicas.
+      // No cambiamos la fase si ya está en "forgot" para no interrumpir el flujo.
+      if (phase !== "forgot") {
+        setPhase("login");
+      }
+    }
+  }, [isAuthenticated, user, authLoading]);
+
+  // La lógica de renderizado ahora es un gran `switch` basado en la 'phase'.
+  if (authLoading) {
+    return <Loading />;
+  }
+
+  switch (phase) {
+    case "login":
+      // A la vista de Login le pasamos una función para que pueda cambiar la fase a "forgot".
+      return <Login onForgot={() => setPhase("forgot")} />;
+
+    case "forgot":
+      // A la de ForgotPassword, una para volver a "login".
+      return <ForgotPassword onBack={() => setPhase("login")} />;
+
+    case "change":
+      // A la de cambio de contraseña, el nombre de usuario y una función para cuando termine.
+      return (
+        <FirstPasswordChange
+          username={user?.username ?? ""}
+          onDone={() => setPhase("updated")}
+        />
+      );
+
+    case "updated":
+      // A la de contraseña actualizada, el nombre de usuario y una función para continuar.
+      return (
+        <PasswordUpdated
+          username={user?.username ?? ""}
+          onContinue={() => {
+            // Aquí le decimos al AuthContext que el primer login se completó
+            // y pasamos a la fase final: la aplicación.
+            completeFirstLogin();
+            setPhase("app");
+          }}
+        />
+      );
+
+    case "app":
+      // Una vez en la app, mostramos el layout principal.
+      return <ProtectedLayout />;
+
+    default:
+      // Como fallback, siempre volvemos al login.
+      return <Login onForgot={() => setPhase("forgot")} />;
+  }
 }

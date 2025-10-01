@@ -3,44 +3,52 @@ import Card from "../../components/ui/Card";
 import TextInput from "../../components/ui/TextInput";
 import { PrimaryButton, GhostButton } from "../../components/ui/Button";
 import { Mail } from "lucide-react";
-import { useAuth } from "../../hooks/useAuth";
-import { useNavigate } from "react-router-dom";
 
-export default function ForgotPassword() {
-  const { forgotPassword } = useAuth();
-  const nav = useNavigate();
+// El componente ahora recibe 'onBack' para volver a la pantalla de login.
+export default function ForgotPassword({ onBack }) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handle = async (e: any) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
+
     setLoading(true);
-    const r = await forgotPassword(email.trim());
+    // Simulamos el envío con un retardo, como en el archivo de referencia.
+    await new Promise(resolve => setTimeout(resolve, 500));
     setLoading(false);
-    setSent(r.ok);
+    setSent(true);
   };
 
   return (
-    <div className="min-h-screen grid place-items-center p-4">
+    <div className="min-h-screen grid place-items-center p-4 bg-gray-50">
       <Card className="w-full max-w-md">
         <div className="mb-6 flex items-center justify-between">
-          <div className="font-semibold text-xl">Recuperar acceso</div>
+          <div className="font-semibold text-xl">Movura Admin</div>
+          <div className="text-xs text-gray-500">Recuperar acceso</div>
         </div>
 
         {!sent ? (
-          <form onSubmit={handle} className="space-y-4">
-            <TextInput label="Correo" value={email} onChange={setEmail} placeholder="admin@empresa.com" leftIcon={<Mail className="h-4 w-4 text-gray-400" />} />
+          <form onSubmit={handleSend} className="space-y-4">
+            <p className="text-sm text-gray-600">Ingresa tu correo y te enviaremos una contraseña temporal para que puedas volver a acceder.</p>
+            <TextInput label="Correo" type="email" value={email} onChange={setEmail} placeholder="admin@empresa.com" autoComplete="email" leftIcon={<Mail className="h-4 w-4 text-gray-400" />} required />
             <div className="flex items-center justify-between">
-              <GhostButton onClick={() => nav("/login")}>Volver</GhostButton>
-              <PrimaryButton type="submit" disabled={!email || loading}><Mail className="h-4 w-4" /> Enviar contraseña temporal</PrimaryButton>
+              {/* El botón "Volver" ahora usa la prop onBack */}
+              <GhostButton type="button" onClick={onBack}>Volver</GhostButton>
+              <PrimaryButton type="submit" disabled={!email || loading}>
+                {loading ? "Enviando..." : "Enviar contraseña temporal"}
+              </PrimaryButton>
             </div>
           </form>
         ) : (
           <div className="space-y-4">
-            <div className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">Listo. Si el correo existe, se envió una contraseña temporal.</div>
-            <PrimaryButton onClick={() => nav("/login")}>Volver al login</PrimaryButton>
+            <div className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">
+              <p className="font-medium">¡Listo!</p>
+              <p className="mt-1">Si el correo <strong>{email}</strong> está registrado, recibirás una contraseña temporal en tu bandeja de entrada.</p>
+            </div>
+            {/* El botón para volver al login también usa onBack */}
+            <PrimaryButton onClick={onBack} className="w-full">Volver al login</PrimaryButton>
           </div>
         )}
       </Card>

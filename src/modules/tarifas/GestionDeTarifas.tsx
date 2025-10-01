@@ -1,187 +1,244 @@
-import React, { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Clock, CreditCard, Save, RotateCcw, Building2, User, Mail, MapPin, CalendarClock } from "lucide-react";
-import toast from "react-hot-toast";
+import React, { useMemo, useState } from "react";
+import { Clock, CreditCard, Save, RotateCcw, Building2, Mail, User, MapPin, CalendarClock } from "lucide-react";
 
-import { getParkings, getParkingById, updateParkingConfig, Parking } from "../../services/parkings.api";
-import { useForm } from "../../hooks/useForm";
+// Módulo de Gestión de Tarifas, basado en Archivosreferencia/02 Gestion de Tarifas.txt
 
-import Card from "../../components/ui/Card";
-import TextInput from "../../components/ui/TextInput";
-import { PrimaryButton, GhostButton } from "../../components/ui/Button";
-import { InfoChip, InfoLine } from "../../components/Info";
+function cn(...classes) { return classes.filter(Boolean).join(" "); }
 
-// --- Configuración Inicial y de Validación para el Formulario ---
-const initialFormState = {
-  tarifaBase: "",
-  costoHora: "",
-  fraccionMin: 15,
-  costoFraccion: "",
-  graciaMin: 5,
-  horaCorte: "23:59",
-};
+// --- Componentes de UI internos (para replicar el diseño de referencia) ---
 
-const validator = (form: typeof initialFormState) => ({
-  tarifaBase: form.tarifaBase !== "" && !isNaN(Number(form.tarifaBase)) && Number(form.tarifaBase) >= 0,
-  costoHora: form.costoHora !== "" && !isNaN(Number(form.costoHora)) && Number(form.costoHora) >= 0,
-  fraccionMin: Number(form.fraccionMin) > 0,
-  costoFraccion: form.costoFraccion !== "" && !isNaN(Number(form.costoFraccion)) && Number(form.costoFraccion) >= 0,
-  graciaMin: Number(form.graciaMin) >= 0,
-  horaCorte: /^\d{2}:\d{2}$/.test(form.horaCorte || ""),
-});
+function Card({ children, className }) {
+  return (
+    <div className={cn("rounded-2xl border border-gray-200 bg-white p-6 shadow-sm", className)}>
+      {children}
+    </div>
+  );
+}
 
-// --- Componente Principal ---
-export default function GestionDeTarifasModule() {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [isDirty, setDirty] = useState(false);
-  const queryClient = useQueryClient();
+function Label({ children }) {
+  return <span className="text-sm text-gray-600">{children}</span>;
+}
 
-  // 1. Hook para obtener la lista de todos los estacionamientos (cacheado)
-  const { data: parkingList = [], isLoading: listLoading } = useQuery({ 
-    queryKey: ["parkings"], 
-    queryFn: getParkings 
-  });
+function TextInput({ label, type = "text", value, onChange, placeholder, leftIcon, min, step, help, status }) {
+  return (
+    <label className="block">
+      {label && <Label>{label}</Label>}
+      <div className={cn(
+        "mt-1 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm focus-within:border-sky-500",
+        status === "error" && "border-red-400 bg-red-50",
+        status === "success" && "border-emerald-400 bg-emerald-50"
+      )}>
+        {leftIcon}
+        <input
+          className="w-full bg-transparent outline-none placeholder:text-gray-400"
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          min={min}
+          step={step}
+        />
+      </div>
+      {help && <div className={cn("mt-1 text-xs", status === "error" ? "text-red-600" : "text-emerald-600")}>{help}</div>}
+    </label>
+  );
+}
 
-  // 2. Hook para obtener los detalles del estacionamiento seleccionado
-  const { data: selectedParking, isLoading: detailLoading } = useQuery({
-    queryKey: ["parkings", selectedId],
-    queryFn: () => getParkingById(selectedId!),
-    enabled: !!selectedId, // Solo ejecutar si hay un ID seleccionado
-  });
+function Select({ label, value, onChange, options }) {
+  return (
+    <label className="block">
+      {label && <Label>{label}</Label>}
+      <select
+        className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-sky-500"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
-  // 3. Hook para manejar el estado y la validación del formulario
-  const { form, setForm, update, v } = useForm(initialFormState, validator);
+function PrimaryButton({ children, className, ...props }) {
+  return (
+    <button
+      aria-disabled={props.disabled}
+      className={cn(
+        "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium shadow-sm",
+        "bg-sky-600 text-white hover:bg-sky-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400",
+        props.disabled && "opacity-50 cursor-not-allowed",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+function GhostButton({ children, className, ...props }) {
+  return (
+    <button
+      className={cn(
+        "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium",
+        "hover:bg-gray-100",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+function InfoChip({ icon, title, value }) {
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm">
+      <div className="text-gray-500">{icon}</div>
+      <div className="truncate"><span className="text-gray-500">{title}:</span> <span className="font-medium">{value || "-"}</span></div>
+    </div>
+  );
+}
+
+function InfoLine({ icon, title, value, highlight }) {
+  const badge = highlight === "emerald" ? "bg-emerald-50 text-emerald-700" : highlight === "red" ? "bg-red-50 text-red-700" : "";
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm">
+      <div className="text-gray-500">{icon}</div>
+      <div className="truncate">
+        <span className="text-gray-500">{title}:</span>{" "}
+        {highlight ? (
+          <span className={cn("ml-1 rounded-md px-2 py-0.5 text-xs font-medium", badge)}>{value || "-"}</span>
+        ) : (
+          <span className="font-medium">{value || "-"}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --- Datos de ejemplo (extraídos del archivo de referencia) ---
+const PARKINGS = [
+  {
+    id: "p1",
+    nombre: "Parking Centro",
+    direccion: "Av. Principal 123, Col. Centro, CDMX",
+    grupo: "Gpo. Alfa",
+    adminNombre: "Laura Perez",
+    adminCorreo: "laura.perez@parking.mx",
+    altaISO: "2025-08-10T09:42:00",
+    estatus: "Activo",
+    config: { tarifaBase: 25, costoHora: 35, fraccionMin: 15, costoFraccion: 10, graciaMin: 5, horaCorte: "23:59" },
+  },
+  {
+    id: "p2",
+    nombre: "Plaza Norte",
+    direccion: "Calz. Valle 456, Col. Norte, Monterrey",
+    grupo: "Gpo. Beta",
+    adminNombre: "Carlos Diaz",
+    adminCorreo: "carlos.diaz@parking.mx",
+    altaISO: "2025-07-03T14:10:00",
+    estatus: "Activo",
+    config: { tarifaBase: 20, costoHora: 30, fraccionMin: 10, costoFraccion: 8, graciaMin: 3, horaCorte: "00:00" },
+  },
+  {
+    id: "p3",
+    nombre: "Estacionamiento Sur",
+    direccion: "Av. del Parque 789, Puebla",
+    grupo: "Gpo. Gamma",
+    adminNombre: "Martha Lopez",
+    adminCorreo: "martha.lopez@parking.mx",
+    altaISO: "2025-04-18T08:00:00",
+    estatus: "Cancelado",
+    config: { tarifaBase: 18, costoHora: 26, fraccionMin: 30, costoFraccion: 7, graciaMin: 10, horaCorte: "06:00" },
+  },
+];
+
+function formatDateTime(iso) {
+  try {
+    const d = new Date(iso);
+    const date = d.toLocaleDateString();
+    const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return `${date} ${time}`;
+  } catch { return iso; }
+}
+
+// --- Componente Principal del Módulo ---
+export default function GestionDeTarifas() {
+  const [selectedId, setSelectedId] = useState(PARKINGS[0].id);
+  const selected = useMemo(() => PARKINGS.find(p => p.id === selectedId), [selectedId]);
+  const [form, setForm] = useState(selected ? { ...selected.config } : {});
+  const [dirty, setDirty] = useState(false);
+
+  React.useEffect(() => {
+    if (selected) { setForm({ ...selected.config }); setDirty(false); }
+  }, [selectedId, selected]);
+
+  const v = {
+    tarifaBase: form.tarifaBase !== "" && !isNaN(Number(form.tarifaBase)) && Number(form.tarifaBase) >= 0,
+    costoHora: form.costoHora !== "" && !isNaN(Number(form.costoHora)) && Number(form.costoHora) >= 0,
+    fraccionMin: form.fraccionMin !== "" && Number(form.fraccionMin) > 0,
+    costoFraccion: form.costoFraccion !== "" && !isNaN(Number(form.costoFraccion)) && Number(form.costoFraccion) >= 0,
+    graciaMin: form.graciaMin !== "" && Number(form.graciaMin) >= 0,
+    horaCorte: /^\d{2}:\d{2}$/.test(form.horaCorte || ""),
+  };
   const allValid = Object.values(v).every(Boolean);
 
-  // 4. Hook de mutación para guardar los cambios en la configuración
-  const { mutate: saveChanges, isLoading: isSaving } = useMutation(
-    (newConfig: typeof initialFormState) => updateParkingConfig(selectedId!, newConfig),
-    {
-      onSuccess: (updatedParking) => {
-        toast.success("Tarifas guardadas correctamente");
-        // Invalidar y refetchear los datos del parking para obtener la info más reciente
-        queryClient.invalidateQueries(["parkings", selectedId]);
-        queryClient.setQueryData(["parkings", selectedId], updatedParking);
+  const update = (key, val) => { setForm((f) => ({ ...f, [key]: val })); setDirty(true); };
+  const reset = () => { if(selected) { setForm({ ...selected.config }); setDirty(false); } };
+  const save = () => {
+    if (!allValid || !selected) return;
+    const parkingIndex = PARKINGS.findIndex(p => p.id === selected.id);
+    if (parkingIndex !== -1) {
+        // Esta es una simulación. En una app real, aquí llamarías a una API.
+        PARKINGS[parkingIndex].config = { ...form };
         setDirty(false);
-      },
-      onError: (error: any) => {
-        toast.error(error.message || "No se pudo guardar la configuración");
-      },
+        alert("Tarifas guardadas correctamente para " + selected.nombre);
     }
-  );
-
-  // Efecto para inicializar el ID seleccionado con el primer parking de la lista
-  useEffect(() => {
-    if (!selectedId && parkingList.length > 0) {
-      setSelectedId(parkingList[0].id);
-    }
-  }, [parkingList, selectedId]);
-
-  // Efecto para actualizar el formulario cuando cambia el parking seleccionado
-  useEffect(() => {
-    if (selectedParking?.config) {
-      setForm(selectedParking.config);
-      setDirty(false); // Resetear dirty state al cambiar de parking
-    } else {
-      setForm(initialFormState); // Limpiar si no hay config
-    }
-  }, [selectedParking, setForm]);
-
-  const handleUpdate = (field: keyof typeof initialFormState, value: any) => {
-    update(field, value);
-    setDirty(true);
   };
 
-  const handleReset = () => {
-    if (selectedParking?.config) {
-      setForm(selectedParking.config);
-    }
-    setDirty(false);
-  };
-
-  const handleSave = () => {
-    if (!allValid || !selectedId) return;
-    saveChanges(form);
-  };
-
-  const isLoading = listLoading || detailLoading;
-
-  if (isLoading && !selectedParking) {
-    return <div className="p-6 text-center text-gray-500">Cargando datos...</div>;
-  }
+  if (!selected) return <div>Cargando...</div>;
 
   return (
-    <div className="flex h-full w-full flex-col bg-gray-50 dark:bg-neutral-950">
-      <Header selectedId={selectedId} setSelectedId={setSelectedId} parkingList={parkingList} selectedParking={selectedParking} />
+    <div className="flex h-full w-full flex-col bg-gray-50">
+      <div className="border-b border-gray-200 bg-white/70 backdrop-blur px-4 py-3">
+        <div className="mx-auto max-w-7xl">
+          <Select
+            label="Selecciona estacionamiento"
+            value={selectedId}
+            onChange={setSelectedId}
+            options={PARKINGS.map(p => ({ value: p.id, label: p.nombre }))}
+          />
+          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
+            <InfoChip icon={<Building2 className="h-4 w-4" />} title="Grupo" value={selected.grupo} />
+            <InfoChip icon={<User className="h-4 w-4" />} title="Admin" value={selected.adminNombre} />
+            <InfoChip icon={<Mail className="h-4 w-4" />} title="Correo" value={selected.adminCorreo} />
+          </div>
+        </div>
+      </div>
       
       <div className="mx-auto w-full max-w-7xl p-4">
         <Card>
           <div className="mb-4 flex items-center justify-between">
-            <div className="text-lg font-semibold">Gestión de Tarifas</div>
+            <div className="text-lg font-semibold">Configuración de Tarifas</div>
             <div className="flex items-center gap-2">
-              <GhostButton onClick={handleReset} disabled={!isDirty || isSaving}><RotateCcw className="h-4 w-4" /> Restablecer</GhostButton>
-              <PrimaryButton onClick={handleSave} disabled={!isDirty || !allValid || isSaving}>
-                {isSaving ? "Guardando..." : <><Save className="h-4 w-4" /> Guardar</>}
-              </PrimaryButton>
+              <GhostButton onClick={reset} disabled={!dirty}><RotateCcw className="h-4 w-4" /> Restablecer</GhostButton>
+              <PrimaryButton onClick={save} disabled={!dirty || !allValid}><Save className="h-4 w-4" /> Guardar</PrimaryButton>
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <TextInput label="Tarifa por día (MXN)" type="number" value={form.tarifaBase} onChange={(e) => handleUpdate("tarifaBase", e.target.value)} status={v.tarifaBase?"success":"error"} help="Requerido. No negativo." />
-            <TextInput label="Costo x hora (MXN)" type="number" value={form.costoHora} onChange={(e) => handleUpdate("costoHora", e.target.value)} status={v.costoHora?"success":"error"} help="Requerido. No negativo." />
-            <SelectInput label="Tiempo de fracciones (min)" value={String(form.fraccionMin)} onChange={(e) => handleUpdate("fraccionMin", Number(e.target.value))} options={[5,10,15,20,30,60]} />
-            <TextInput label="Costo de cada fracción (MXN)" type="number" value={form.costoFraccion} onChange={(e) => handleUpdate("costoFraccion", e.target.value)} status={v.costoFraccion?"success":"error"} help="Requerido. No negativo." />
-            <SelectInput label="Tiempo de gracia (min)" value={String(form.graciaMin)} onChange={(e) => handleUpdate("graciaMin", Number(e.target.value))} options={[0,3,5,10,15,20,30]} />
-            <TextInput label="Hora de corte" type="time" value={form.horaCorte} onChange={(e) => handleUpdate("horaCorte", e.target.value)} status={v.horaCorte?"success":"error"} help="Formato HH:MM" />
+            <TextInput label="Tarifa por día (MXN)" type="number" value={form.tarifaBase} onChange={(v) => update("tarifaBase", v)} status={v.tarifaBase ? "success" : "error"} help={v.tarifaBase ? "OK" : "Requerido, >= 0"} />
+            <TextInput label="Costo x hora (MXN)" type="number" value={form.costoHora} onChange={(v) => update("costoHora", v)} status={v.costoHora ? "success" : "error"} help={v.costoHora ? "OK" : "Requerido, >= 0"} />
+            <Select label="Fracciones (min)" value={String(form.fraccionMin)} onChange={(val) => update("fraccionMin", Number(val))} options={[5,10,15,20,30,60].map(n => ({ value: String(n), label: `${n} min` }))} />
+            <TextInput label="Costo Fracción (MXN)" type="number" value={form.costoFraccion} onChange={(v) => update("costoFraccion", v)} status={v.costoFraccion ? "success" : "error"} help={v.costoFraccion ? "OK" : "Requerido, >= 0"} />
+            <Select label="Gracia (min)" value={String(form.graciaMin)} onChange={(val) => update("graciaMin", Number(val))} options={[0,3,5,10,15,20,30].map(n => ({ value: String(n), label: `${n} min` }))} />
+            <TextInput label="Hora de corte" type="time" value={form.horaCorte} onChange={(v) => update("horaCorte", v)} status={v.horaCorte ? "success" : "error"} help={v.horaCorte ? "OK" : "Formato HH:MM"} />
           </div>
         </Card>
       </div>
     </div>
   );
-}
-
-// --- Sub-componentes para Limpieza ---
-
-function Header({ selectedId, setSelectedId, parkingList, selectedParking }: { selectedId: string | null; setSelectedId: (id: string) => void; parkingList: Parking[]; selectedParking: Parking | null | undefined; }) {
-  return (
-    <div className="border-b border-gray-200 bg-white/70 backdrop-blur px-4 py-3 dark:border-neutral-800 dark:bg-neutral-950/70">
-      <div className="mx-auto max-w-7xl">
-        <SelectInput label="Selecciona estacionamiento" value={selectedId ?? ""} onChange={(e) => setSelectedId(e.target.value)} options={parkingList.map(p => ({ label: p.nombre, value: p.id }))} />
-        <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
-          <InfoChip icon={<Building2 className="h-4 w-4" />} title="Grupo" value={selectedParking?.grupo} />
-          <InfoChip icon={<User className="h-4 w-4" />} title="Administrador" value={selectedParking?.adminNombre} />
-          <InfoChip icon={<Mail className="h-4 w-4" />} title="Correo" value={selectedParking?.adminCorreo} />
-        </div>
-        <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
-          <InfoLine icon={<MapPin className="h-4 w-4" />} title="Nombre" value={selectedParking?.nombre} />
-          <InfoLine icon={<MapPin className="h-4 w-4" />} title="Dirección" value={selectedParking?.direccion} />
-          <InfoLine icon={<CalendarClock className="h-4 w-4" />} title="Alta" value={formatDateTime(selectedParking?.altaISO)} />
-          <InfoLine icon={<CreditCard className="h-4 w-4" />} title="Estatus" value={selectedParking?.estatus} highlight={selectedParking?.estatus === "Activo" ? "emerald" : "red"} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SelectInput({ label, value, onChange, options }: { label:string, value: string | number, onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void, options: (string | number | { label: string, value: string | number })[] }) {
-  return (
-    <label className="block">
-      <span className="text-sm text-gray-600 dark:text-gray-300">{label}</span>
-      <select className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-sky-500 dark:border-gray-700 dark:bg-neutral-900" value={value} onChange={onChange}>
-        {options.map((opt) => {
-          const val = typeof opt === 'object' ? opt.value : opt;
-          const lbl = typeof opt === 'object' ? opt.label : opt;
-          return <option key={val} value={val}>{lbl}</option>
-        })}
-      </select>
-    </label>
-  )
-}
-
-function formatDateTime(iso?: string) {
-  try {
-    if (!iso) return "-";
-    const d = new Date(iso);
-    return d.toLocaleString([], { year: 'numeric', month: 'numeric', day: 'numeric', hour: "2-digit", minute: "2-digit" });
-  } catch { return iso || "-"; }
 }
